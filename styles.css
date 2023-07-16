@@ -6,3 +6,15 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+.rsync-plugin-ribbon-class {
+	background: linear-gradient(17deg, #007e92, #9a0404);
+    width: 20px;
+    height: 20px;
+	border-radius: 21%;
+    transform: rotate(45deg);
+}
+
+.rsync-plugin-ribbon-class:hover {
+	cursor: pointer;
+}

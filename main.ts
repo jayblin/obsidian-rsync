@@ -1,28 +1,83 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { exec } from 'child_process';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, SettingTab } from 'obsidian';
 
-// Remember to rename these classes and interfaces!
-
-interface MyPluginSettings {
-	mySetting: string;
+interface RsyncPluginSettings {
+	backupAddress: string;
+	username: string;
+	wslVaultPath: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+const DEFAULT_SETTINGS: RsyncPluginSettings = {
+	backupAddress: '',
+	username: '',
+	wslVaultPath: '',
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class RsyncPlugin extends Plugin {
+	settings: RsyncPluginSettings;
 
 	async onload() {
 		await this.loadSettings();
 
+		// This adds a settings tab so the user can configure various aspects of the plugin
+		const settingTab = new RsyncSettingTab(this.app, this);
+		this.addSettingTab(settingTab);
+
 		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
+		const ribbonIconEl = this.addRibbonIcon(
+			'folder-sync',
+			'Sync vault',
+			async (evt: MouseEvent) => {
+				// Called when the user clicks the icon.
+				// new Notice('This is a notice!');
+				const addr = this.settings.backupAddress;
+
+				// 192.168.0.201
+				if (!(/^(\d{1,3}\.){3}\d{1,3}$/.test(addr))) {
+					new Notice('Go to settings and set a valid backup IP-address.');
+					return;
+				}
+
+				if (!this.settings.wslVaultPath) {
+					new Notice('Go to settings and set a wsl-accessible path to vault.');
+					return;
+				}
+
+				if (!this.settings.username) {
+					new Notice('Go to settings and set a username for backup server authentication.');
+					return;
+				}
+
+				try {
+
+						console.log(`wsl rsync -av ${this.settings.wslVaultPath} ${this.settings.username}@${addr}:~/Obsidian/`);
+					return;
+					const proc = exec(
+						`wsl rsync -av ${this.settings.wslVaultPath} ${this.settings.username}@${addr}:~/Obsidian/`,
+						// `wsl pwd`,
+						(error, stdout, stderr) => {
+							if (error) {
+								console.log(`error: ${error.message}`);
+								return;
+							}
+							if (stderr) {
+								console.log(`stderr: ${stderr}`);
+								return;
+							}
+							console.log(`stdout: ${stdout}`);
+						}
+					);
+				}
+				catch (e) {
+					console.error(e);
+				}
+			}
+		);
+
 		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
+		ribbonIconEl.addClass('rsync-plugin-ribbon-class');
+
+		return;
 
 		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
 		const statusBarItemEl = this.addStatusBarItem();
@@ -65,9 +120,6 @@ export default class MyPlugin extends Plugin {
 			}
 		});
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
 		// Using this function will automatically remove the event listener when this plugin is disabled.
 		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
@@ -83,7 +135,11 @@ export default class MyPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign(
+			{},
+			DEFAULT_SETTINGS,
+			await this.loadData()
+		);
 	}
 
 	async saveSettings() {
@@ -107,10 +163,10 @@ class SampleModal extends Modal {
 	}
 }
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+class RsyncSettingTab extends PluginSettingTab {
+	plugin: RsyncPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: RsyncPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -120,17 +176,36 @@ class SampleSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
+		containerEl.createEl('h2', {text: 'Settings for rsync plugin.'});
 
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
+			.setName('Backup address')
+			.setDesc('')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+				// .setPlaceholder('Enter your secret')
+				.setValue(this.plugin.settings.backupAddress)
 				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.mySetting = value;
+					this.plugin.settings.backupAddress = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('WSL-accessible path to this vault')
+			.setDesc('')
+			.addText(text => text
+				.setValue(this.plugin.settings.wslVaultPath)
+				.onChange(async (value) => {
+					this.plugin.settings.wslVaultPath = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Username for backup server authentication')
+			.setDesc('')
+			.addText(text => text
+				.setValue(this.plugin.settings.username)
+				.onChange(async (value) => {
+					this.plugin.settings.username = value;
 					await this.plugin.saveSettings();
 				}));
 	}
